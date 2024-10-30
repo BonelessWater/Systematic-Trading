@@ -1,105 +1,178 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 class Strategy1:
-    def __init__(self, data, risk_target, capital):
-        if 'PercentChange' not in data.columns:
-            raise ValueError("Data must contain 'PercentChange' column.")
+    def __init__(self, data, risk_target, capital, num_stocks=100):
+        """
+        :param data: DataFrame with ['date', 'ticker', 'close', 'PercentChange'] columns.
+        :param risk_target: Risk target parameter (for future use).
+        :param capital: Total capital available for investment.
+        :param num_stocks: Number of stocks to include in the portfolio.
+        """
+        if data is None or data.empty:
+            raise ValueError("The input data is either None or empty.")
+
         self.data = data
         self.risk_target = risk_target
         self.capital = capital
+        self.num_stocks = num_stocks  # Number of top stocks to select
 
     def execute(self):
-        """Simple moving average crossover strategy."""
-        print("Executing Strategy1...")
-        data = self.data.copy()
+        """Selects top performers daily and invests for the next day."""
+        print(f"Executing Top {self.num_stocks} Winner Strategy...")
+        self.data = self.data.sort_values(['date', 'PercentChange'], ascending=[True, False])
 
-        # Calculate moving averages
-        data['SMA_10'] = data['close'].rolling(window=10).mean()
-        data['SMA_30'] = data['close'].rolling(window=30).mean()
+        # Debugging: Check if 'ticker' column exists
+        print("Data Columns:", self.data.columns)
 
-        # Generate buy/sell signals
-        data['Signal'] = np.where(data['SMA_10'] > data['SMA_30'], 1, 0)
-        data['Position'] = data['Signal'].diff()
+        # Group by date and select the top `num_stocks` tickers with the highest PercentChange
+        daily_top_stocks = self.data.groupby('date').head(self.num_stocks)
 
-        # Calculate strategy returns and PnL
-        data['Strategy_Returns'] = data['PercentChange'] * data['Position'].shift(1)
-        data['PnL'] = self.capital * data['Strategy_Returns'].cumsum()
+        # Ensure it’s a copy to avoid warnings
+        daily_top_stocks = daily_top_stocks.copy()
 
-        # Calculate realized volatility (annualized)
-        data['Volatility'] = data['Strategy_Returns'].rolling(window=30).std() * np.sqrt(252)
+        # Shift the close prices to simulate next day's returns
+        daily_top_stocks.loc[:, 'Next_Close'] = daily_top_stocks.groupby('ticker')['close'].shift(-1)
+        daily_top_stocks = daily_top_stocks.dropna(subset=['Next_Close'])  # Drop NaNs after shifting
 
-        # Reset index to access 'date' as a column
-        data = data.reset_index()
+        # Calculate daily returns for the selected stocks
+        daily_top_stocks['Daily_Return'] = (daily_top_stocks['Next_Close'] / daily_top_stocks['close']) - 1
 
-        return data[['date', 'close', 'PnL', 'Volatility']].set_index('date')
+        # Calculate equal allocation and portfolio daily return
+        daily_top_stocks['Weight'] = 1 / self.num_stocks  # Adjust weight based on the number of stocks
+        daily_top_stocks['Weighted_Return'] = daily_top_stocks['Weight'] * daily_top_stocks['Daily_Return']
+        portfolio_returns = daily_top_stocks.groupby('date')['Weighted_Return'].sum()
 
-    def plot_pnl(self, result):
-        """Plot cumulative PnL over time."""
-        plt.figure(figsize=(10, 6))
-        result['PnL'].plot(title='Cumulative PnL - Strategy 1', xlabel='Date', ylabel='PnL (USD)')
+        # Calculate cumulative returns and cumulative PnL
+        cumulative_returns = (1 + portfolio_returns).cumprod() - 1
+        cumulative_pnl = self.capital * cumulative_returns
+
+        print(cumulative_pnl)
+
+        
+        # Store results with drawdown
+        result = pd.DataFrame({
+            'date': cumulative_pnl.index,
+            'PnL': cumulative_pnl.values,
+            'Cumulative_Returns': cumulative_returns.values
+        })
+
+        # Ensure dates are valid and sorted
+        result['date'] = pd.to_datetime(result['date'], errors='coerce')
+        result = result.dropna(subset=['date']).sort_values(by='date')
+
+        result['Drawdown'] = self.calculate_drawdown(cumulative_returns)
+        # Create the frequency table of stock selections
+        self.generate_selection_csv(daily_top_stocks)
+
+        return result
+
+    def generate_selection_csv(self, daily_top_stocks, csv_path='stock_selection_frequency.csv'):
+        """Generate a CSV representing the proportion of times each stock is selected."""
+        # Debugging: Check columns of daily_top_stocks
+        print("Daily Top Stocks Columns:", daily_top_stocks.columns)
+
+        # Ensure 'ticker' column exists before value_counts()
+        if 'ticker' not in daily_top_stocks.columns:
+            raise KeyError("The 'ticker' column is missing from the DataFrame.")
+
+        # Count the occurrences of each stock in the top selections
+        selection_counts = daily_top_stocks['ticker'].value_counts()
+
+        # Calculate the proportion of times each stock was selected
+        total_days = daily_top_stocks['date'].nunique()  # Total number of unique trading days
+        selection_proportions = selection_counts / total_days
+
+        # Create a DataFrame to store the results
+        selection_df = pd.DataFrame({
+            'Ticker': selection_proportions.index,
+            'Proportion_Selected': selection_proportions.values
+        })
+
+        # Sort by proportion in descending order
+        selection_df = selection_df.sort_values(by='Proportion_Selected', ascending=False)
+
+        # Save to CSV
+        selection_df.to_csv(csv_path, index=False)
+        print(f"Stock selection frequency saved to {csv_path}")
+
+
+    def calculate_drawdown(self, cumulative_returns):
+        """Calculate the drawdown from the cumulative returns series."""
+        cumulative_max = cumulative_returns.cummax()
+        drawdown = (cumulative_returns - cumulative_max) / (cumulative_max + 1e-8)  # Add epsilon to avoid divide-by-zero
+        return drawdown
+
+    def largest_drawdown(self, result):
+        """Calculate the largest drawdown."""
+        return result['Drawdown'].min()  # Most negative drawdown is the largest
+
+    def plot_pnl(self, result, csv_path='pnl_drawdown.csv', save_path='pnl_plot.png', log_scale=False):
+        """Plot cumulative PnL and drawdown over time, with optional saving to a CSV and logarithmic scaling."""
+        # Ensure 'date' column is in datetime format and drop invalid dates
+        result['date'] = pd.to_datetime(result['date'], errors='coerce')
+
+        # Filter out invalid or out-of-bounds dates
+        valid_dates = (result['date'].dt.year >= 1) & (result['date'].dt.year <= 9999)
+        result = result[valid_dates].sort_values(by='date')
+
+        if result.empty:
+            raise ValueError("No valid dates found in the result. Cannot plot.")
+
+        # Save result to CSV
+        result.to_csv(csv_path, index=False)
+        print(f"Data saved to {csv_path}")
+
+        # Plot cumulative PnL and drawdown
+        fig, ax1 = plt.subplots(figsize=(12, 6), dpi=100)
+
+        ax1.set_xlabel('Date')
+        ax1.set_ylabel('PnL (USD)', color='tab:blue')
+        ax1.plot(result['date'], result['PnL'], label='Cumulative PnL', color='tab:blue')
+        ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+        # Apply logarithmic scaling if requested
+        if log_scale:
+            ax1.set_yscale('log')
+            print("Logarithmic scale applied to PnL.")
+
+        ax2 = ax1.twinx()
+        ax2.set_ylabel('Drawdown', color='tab:red')
+        ax2.plot(result['date'], result['Drawdown'], label='Drawdown', color='tab:red')
+        ax2.tick_params(axis='y', labelcolor='tab:red')
+
+        fig.tight_layout()
+        plt.title('Cumulative PnL and Drawdown Over Time')
         plt.grid(True)
+
+        if save_path:
+            plt.savefig(save_path)  # Save the plot if a path is provided
+            print(f"Plot saved to {save_path}")
+
         plt.show()
 
     def metrics(self, result):
-        """Print performance metrics."""
-        total_pnl = result['PnL'].iloc[-1]
-        annual_volatility = result['Volatility'].mean() * np.sqrt(252)  # Annualized volatility
-        print(f"Total PnL: ${total_pnl:.2f}")
+        """Print key performance metrics including total PnL, volatility, and largest drawdown."""
+        total_pnl = result['PnL'].iloc[-1]  # Final cumulative PnL
+        max_drawdown = self.largest_drawdown(result)  # Largest drawdown from the series
+        daily_returns = result['Cumulative_Returns'].pct_change().dropna()  # Daily percentage returns
+
+        # Calculate annualized volatility from daily returns
+        annual_volatility = daily_returns.std() * np.sqrt(252)
+
+        # Print key metrics clearly
+        print(f"=== Strategy Metrics ===")
+        print(f"Total PnL: ${total_pnl:,.2f}")
+        print(f"Largest Drawdown: {max_drawdown:.4%}")
         print(f"Annualized Volatility: {annual_volatility:.4f}")
+        print(f"Max PnL: ${result['PnL'].max():,.2f}")
+        print(f"Min PnL: ${result['PnL'].min():,.2f}")
 
-
-class Strategy2:
-    def __init__(self, data, risk_target, capital):
-        if 'PercentChange' not in data.columns:
-            raise ValueError("Data must contain 'PercentChange' column.")
-        self.data = data
-        self.risk_target = risk_target
-        self.capital = capital
-
-    def execute(self):
-        """Momentum strategy based on RSI."""
-        print("Executing Strategy2...")
-        data = self.data.copy()
-
-        # Calculate RSI
-        delta = data['close'].diff(1)
-        gain = np.where(delta > 0, delta, 0)
-        loss = np.where(delta < 0, -delta, 0)
-
-        avg_gain = pd.Series(gain).rolling(window=14).mean()
-        avg_loss = pd.Series(loss).rolling(window=14).mean()
-
-        rs = avg_gain / avg_loss
-        data['RSI'] = 100 - (100 / (1 + rs))
-
-        # Generate buy/sell signals based on RSI thresholds
-        data['Signal'] = np.where(data['RSI'] < 30, 1, np.where(data['RSI'] > 70, -1, 0))
-        data['Position'] = data['Signal'].diff()
-
-        # Calculate strategy returns and PnL
-        data['Strategy_Returns'] = data['PercentChange'] * data['Position'].shift(1)
-        data['PnL'] = self.capital * data['Strategy_Returns'].cumsum()
-
-        # Calculate realized volatility (annualized)
-        data['Volatility'] = data['Strategy_Returns'].rolling(window=30).std() * np.sqrt(252)
-
-        # Reset index to access 'date' as a column
-        data = data.reset_index()
-
-        return data[['date', 'close', 'PnL', 'Volatility']].set_index('date')
-
-    def plot_pnl(self, result):
-        """Plot cumulative PnL over time."""
-        plt.figure(figsize=(10, 6))
-        result['PnL'].plot(title='Cumulative PnL - Strategy 2', xlabel='Date', ylabel='PnL (USD)')
-        plt.grid(True)
-        plt.show()
-
-    def metrics(self, result):
-        """Print performance metrics."""
-        total_pnl = result['PnL'].iloc[-1]
-        annual_volatility = result['Volatility'].mean() * np.sqrt(252)  # Annualized volatility
-        print(f"Total PnL: ${total_pnl:.2f}")
-        print(f"Annualized Volatility: {annual_volatility:.4f}")
+        return {
+            'Total PnL': total_pnl,
+            'Largest Drawdown': max_drawdown,
+            'Annualized Volatility': annual_volatility,
+            'Max PnL': result['PnL'].max(),
+            'Min PnL': result['PnL'].min()
+        }

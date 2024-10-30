@@ -1,32 +1,31 @@
 from trading_system import TradingSystem
-from strategy import Strategy1, Strategy2
+from strategy import Strategy1
 from data import get_data
 from datetime import datetime
 import pandas as pd
 
+
 if __name__ == "__main__":
 
     # Get data, end_date defaults to today's date
-    data : pd.DataFrame = get_data(start_date='2010-01-01')
-    
-    print(data.columns)
-    
+    print('Fetching data')
+    data : pd.DataFrame = get_data(start_date='2015-01-01')
+    print('Data fetched')
+
     risk_target = 0.30 # Risky
-    capital = 1 # USD
+    capital = 1000 # USD
 
     trading_system = TradingSystem(
         strategies=[
             #(Proportion of capital for strategy, Strategy Class)
-            (0.3, Strategy1(data, risk_target=risk_target, capital=capital)),
-            (0.7, Strategy2(data, risk_target=risk_target, capital=capital))
+            (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=100)),
         ]
     )
 
     trading_system.backtest()
     trading_system.graph()
     trading_system.metrics()
-    #trading_system.plot_pnl()
-
+    trading_system.plot_pnl(save_path='pnl_plot.png', log_scale=True)
 
     '''
     # TODO: Define the TradingSystem class
@@ -44,5 +43,3 @@ if __name__ == "__main__":
 
     Set up Systematic live trader
     '''
-
-
