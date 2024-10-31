@@ -48,9 +48,6 @@ class Strategy1:
         cumulative_returns = (1 + portfolio_returns).cumprod() - 1
         cumulative_pnl = self.capital * cumulative_returns
 
-        print(cumulative_pnl)
-
-        
         # Store results with drawdown
         result = pd.DataFrame({
             'date': cumulative_pnl.index,

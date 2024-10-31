@@ -25,7 +25,11 @@ class TradingSystem:
         print("Calculating metrics...")
         for strategy_name, result in self.results.items():
             print(f"\n{strategy_name} Metrics:")
-            print(result.describe())
+            print(result)
+            resultx = result
+        for proportion, strategy in self.strategies:
+            print(f"Metrics {strategy.__class__.__name__}")
+            x = strategy.metrics(resultx)
 
     def get_strategy_instance(self, strategy_name):
         """Helper to retrieve the strategy instance by name."""
