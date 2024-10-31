@@ -1,4 +1,5 @@
 yfinance
 numpy
 pandas
-matplotlib.pyplot
+matplotlib
+sqlite

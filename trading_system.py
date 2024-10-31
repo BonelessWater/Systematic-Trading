@@ -13,7 +13,8 @@ class TradingSystem:
         for proportion, strategy in self.strategies:
             print(f"Backtesting {strategy.__class__.__name__} with {proportion * 100}% of capital.")
             self.results[strategy.__class__.__name__] = strategy.execute()
-
+            strategy.plot_capital_over_time(self.results[strategy.__class__.__name__], save_path='capital_over_time.png')
+    
     def graph(self):
         """Visualize the results."""
         print("Generating graphs...")

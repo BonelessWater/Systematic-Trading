@@ -6,12 +6,15 @@ import pandas as pd
 
 
 if __name__ == "__main__":
+    #! Run if database is not initialized
+    #init_db()
 
     # Get data, end_date defaults to today's date
     print('Fetching data')
     data : pd.DataFrame = get_data(start_date='2024-01-01')
     print('Data fetched')
 
+    print(data)
     risk_target = 0.30 # Risky
     capital = 1 # USD
 
@@ -20,7 +23,7 @@ if __name__ == "__main__":
             #(Proportion of capital for strategy, Strategy Class)
             (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=10)), 
         ]
-    )
+    )   
 
     trading_system.backtest()
     trading_system.graph()

@@ -27,7 +27,12 @@ def get_data(fetch=False, start_date='2010-01-01'):
         # Check the latest date available in the database
         latest_date_query = "SELECT MAX(date) as latest_date FROM stock_data"
         latest_date_result = pd.read_sql_query(latest_date_query, conn)
-        latest_date_in_db = pd.to_datetime(latest_date_result.iloc[0]['latest_date'])
+        latest_date_in_db = pd.to_datetime(latest_date_result.iloc[0]['latest_date'], errors='coerce')
+
+        # Handle case where no data is available in the database
+        if pd.isna(latest_date_in_db):
+            print("No existing data found. Starting from the provided start_date.")
+            latest_date_in_db = pd.to_datetime(start_date)
 
         # If fetch is False, just return the available data
         if not fetch:
@@ -35,7 +40,7 @@ def get_data(fetch=False, start_date='2010-01-01'):
             return fetch_data_from_db(conn, start_date, end_date)
 
         # If data is up-to-date, return it without fetching new data
-        if latest_date_in_db and latest_date_in_db.strftime('%Y-%m-%d') >= end_date:
+        if latest_date_in_db.strftime('%Y-%m-%d') >= end_date:
             print(f"Data is up to date for {end_date}.")
             return fetch_data_from_db(conn, start_date, end_date)
 
@@ -78,26 +83,67 @@ def update_and_fetch_data(conn, start_date, end_date):
 
 def fetch_data_from_db(conn, start_date, end_date):
     """Fetch the required data from the database."""
+    # Ensure dates are formatted as strings
+    start_date = pd.to_datetime(start_date).strftime('%Y-%m-%d')
+    end_date = pd.to_datetime(end_date).strftime('%Y-%m-%d')
+
     query = """
     SELECT ticker, DATE(date) as date, open, high, low, close, volume
     FROM stock_data
     WHERE DATE(date) BETWEEN DATE(?) AND DATE(?)
     ORDER BY ticker, date
     """
-    all_data = pd.read_sql_query(query, conn, params=(start_date, end_date))
 
-    if all_data.empty:
-        print("No data available in the specified range.")
+    try:
+        # Execute the query with properly formatted string dates
+        all_data = pd.read_sql_query(query, conn, params=(start_date, end_date))
+
+        if all_data.empty:
+            print("No data available in the specified range.")
+            return None
+
+        # Ensure 'date' is in datetime format
+        all_data['date'] = pd.to_datetime(all_data['date'], errors='coerce')
+
+        # Add 'PercentChange' column
+        all_data['PercentChange'] = (all_data['close'] - all_data['open']) / all_data['open']
+
+        # Keep 'ticker' as a column, not just part of the index
+        all_data = all_data[['ticker', 'date', 'open', 'high', 'low', 'close', 'volume', 'PercentChange']]
+        print(f"Fetched {len(all_data)} rows of data.")
+
+        return all_data
+
+    except Exception as e:
+        print(f"Error fetching data: {e}")
         return None
 
-    # Ensure 'date' is in datetime format
-    all_data['date'] = pd.to_datetime(all_data['date'], errors='coerce')
+def initialize_database(db_name='sp500_stock_data.db'):
+    """Initialize the stock_data table in the database."""
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
 
-    # Add 'PercentChange' column
-    all_data['PercentChange'] = (all_data['close'] - all_data['open']) / all_data['open']
+    # SQL command to create the table if it doesn't exist
+    create_table_query = """
+    CREATE TABLE IF NOT EXISTS stock_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT NOT NULL,
+        date TEXT NOT NULL,
+        open REAL,
+        high REAL,
+        low REAL,
+        close REAL,
+        volume INTEGER
+    );
+    """
 
-    # Keep 'ticker' as a column, not just part of the index
-    all_data = all_data[['ticker', 'date', 'open', 'high', 'low', 'close', 'volume', 'PercentChange']]
-    print(f"Fetched {len(all_data)} rows of data.")
-    
-    return all_data
+    try:
+        cursor.execute(create_table_query)
+        conn.commit()
+        print("Database initialized and table created (if it didn't exist).")
+
+    except sqlite3.Error as e:
+        print(f"An error occurred: {e}")
+
+    finally:
+        conn.close()
