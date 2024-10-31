@@ -1,6 +1,7 @@
 from trading_system import TradingSystem
 from strategy import Strategy1
 from data import get_data
+from init_db import init_db
 from datetime import datetime
 import pandas as pd
 
@@ -11,17 +12,16 @@ if __name__ == "__main__":
 
     # Get data, end_date defaults to today's date
     print('Fetching data')
-    data : pd.DataFrame = get_data(start_date='2015-01-01', fetch=False)
+    data : pd.DataFrame = get_data(start_date='2024-01-01', fetch=False)
     print('Data fetched')
 
-    print(data)
     risk_target = 0.30 # Risky
-    capital = 1000 # USD
+    capital = 1 # USD
 
     trading_system = TradingSystem(
         strategies=[
             #(Proportion of capital for strategy, Strategy Class)
-            (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=100)),
+            (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=10)),
         ]
     )   
 

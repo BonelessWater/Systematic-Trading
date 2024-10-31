@@ -56,3 +56,4 @@ class TradingSystem:
                     save_path=f"{save_path}_{strategy_name}.png" if save_path else None, 
                     log_scale=log_scale  # Pass log_scale as a keyword argument
                 )
+                strategy_instance.plot_drawdown(result)
