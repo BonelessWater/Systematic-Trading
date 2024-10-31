@@ -52,17 +52,6 @@ class Strategy1:
         cumulative_returns = (1 + portfolio_returns).cumprod() - 1
         cumulative_pnl = self.capital * cumulative_returns
 
-        print(cumulative_pnl)
-
-        # Check for stop-loss breach
-        if (cumulative_pnl < - stop_loss_threshold * self.capital).any():
-            print(f"Stop-loss triggered! Portfolio dropped below {stop_loss_threshold * 100}% loss.")
-            # Find the date of the breach
-            breach_date = cumulative_pnl[cumulative_pnl < -stop_loss_threshold * self.capital].index[0]
-            print(f"Terminating trading on {breach_date}.")
-            cumulative_pnl = cumulative_pnl[:breach_date]  # Keep results up to the breach date
-            portfolio_returns = portfolio_returns[:breach_date]  # Adjust returns
-
         # Store results with drawdown
         result = pd.DataFrame({
             'date': cumulative_pnl.index,
