@@ -18,8 +18,8 @@ class Strategy1:
         self.capital = capital
         self.num_stocks = num_stocks  # Number of top stocks to select
 
-    def execute(self):
-        """Selects top performers daily and invests for the next day."""
+    def execute(self, stop_loss_threshold=0.1):
+        """Selects top performers daily and invests for the next day, with stop-loss to terminate early."""
         print(f"Executing Top {self.num_stocks} Winner Strategy...")
         self.data = self.data.sort_values(['date', 'PercentChange'], ascending=[True, False])
 
@@ -50,12 +50,20 @@ class Strategy1:
 
         print(cumulative_pnl)
 
-        
+        # Check for stop-loss breach
+        if (cumulative_pnl < - stop_loss_threshold * self.capital).any():
+            print(f"Stop-loss triggered! Portfolio dropped below {stop_loss_threshold * 100}% loss.")
+            # Find the date of the breach
+            breach_date = cumulative_pnl[cumulative_pnl < -stop_loss_threshold * self.capital].index[0]
+            print(f"Terminating trading on {breach_date}.")
+            cumulative_pnl = cumulative_pnl[:breach_date]  # Keep results up to the breach date
+            portfolio_returns = portfolio_returns[:breach_date]  # Adjust returns
+
         # Store results with drawdown
         result = pd.DataFrame({
             'date': cumulative_pnl.index,
             'PnL': cumulative_pnl.values,
-            'Cumulative_Returns': cumulative_returns.values
+            'Cumulative_Returns': cumulative_returns[:len(cumulative_pnl)].values
         })
 
         # Ensure dates are valid and sorted
@@ -67,7 +75,7 @@ class Strategy1:
         self.generate_selection_csv(daily_top_stocks)
 
         return result
-
+    
     def generate_selection_csv(self, daily_top_stocks, csv_path='stock_selection_frequency.csv'):
         """Generate a CSV representing the proportion of times each stock is selected."""
         # Debugging: Check columns of daily_top_stocks
@@ -132,10 +140,13 @@ class Strategy1:
         ax1.plot(result['date'], result['PnL'], label='Cumulative PnL', color='tab:blue')
         ax1.tick_params(axis='y', labelcolor='tab:blue')
 
-        # Apply logarithmic scaling if requested
+        # Ensure PnL plot handles negative values gracefully
         if log_scale:
-            ax1.set_yscale('log')
-            print("Logarithmic scale applied to PnL.")
+            if (result['PnL'] <= 0).any():
+                print("Negative PnL detected, skipping log scale.")
+            else:
+                ax1.set_yscale('log')
+                print("Logarithmic scale applied to PnL.")
 
         ax2 = ax1.twinx()
         ax2.set_ylabel('Drawdown', color='tab:red')
@@ -147,8 +158,29 @@ class Strategy1:
         plt.grid(True)
 
         if save_path:
-            plt.savefig(save_path)  # Save the plot if a path is provided
+            plt.savefig(save_path)
             print(f"Plot saved to {save_path}")
+
+        plt.show()
+
+    def plot_capital_over_time(self, result, save_path='capital_over_time.png'):
+        """Plot the total capital over time based on PnL."""
+        # Calculate total capital over time by adding PnL to initial capital
+        result['Total_Capital'] = self.capital + result['PnL']
+
+        # Plot the total capital over time
+        plt.figure(figsize=(12, 6), dpi=100)
+        plt.plot(result['date'], result['Total_Capital'], label='Total Capital', color='green')
+
+        plt.xlabel('Date')
+        plt.ylabel('Capital (USD)')
+        plt.title('Total Capital Over Time')
+        plt.grid(True)
+        plt.legend()
+
+        if save_path:
+            plt.savefig(save_path)
+            print(f"Capital graph saved to {save_path}")
 
         plt.show()
 
