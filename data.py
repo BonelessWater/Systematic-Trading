@@ -55,6 +55,22 @@ def get_data(fetch=False, start_date='2010-01-01'):
     finally:
         conn.close()
 
+def add_tickers(tickers, db_name='sp500_stock_data.db'):
+    """Add a list of tickers to the tickers table."""
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+
+    try:
+        cursor.executemany("INSERT OR IGNORE INTO tickers (ticker) VALUES (?)", [(ticker,) for ticker in tickers])
+        conn.commit()
+        print(f"Tickers added to the database: {tickers}")
+
+    except sqlite3.Error as e:
+        print(f"An error occurred while adding tickers: {e}")
+
+    finally:
+        conn.close()
+
 def update_and_fetch_data(conn, start_date, end_date):
     """Fetch and update the database with new data."""
     tickers_query = "SELECT DISTINCT ticker FROM stock_data"
@@ -80,6 +96,22 @@ def update_and_fetch_data(conn, start_date, end_date):
             continue  # Skip if the ticker is delisted
 
     return fetch_data_from_db(conn, start_date, end_date)
+
+def add_tickers(tickers, db_name='sp500_stock_data.db'):
+    """Add a list of tickers to the tickers table."""
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+
+    try:
+        cursor.executemany("INSERT OR IGNORE INTO tickers (ticker) VALUES (?)", [(ticker,) for ticker in tickers])
+        conn.commit()
+        print(f"Tickers added to the database: {tickers}")
+
+    except sqlite3.Error as e:
+        print(f"An error occurred while adding tickers: {e}")
+
+    finally:
+        conn.close()
 
 def fetch_data_from_db(conn, start_date, end_date):
     """Fetch the required data from the database."""
@@ -147,3 +179,40 @@ def initialize_database(db_name='sp500_stock_data.db'):
 
     finally:
         conn.close()
+
+def add_tickers_and_data(tickers, db_name='sp500_stock_data.db'):
+    """Add new tickers to the database and fetch their data."""
+    # Step 1: Add tickers to the tickers table
+    add_tickers(tickers, db_name=db_name)
+    
+    # Step 2: Fetch and add data for each new ticker
+    conn = sqlite3.connect(db_name)
+    start_date = '2010-01-01'  # You may customize the start date here
+    end_date = get_last_trading_day()  # Fetch until the last trading day
+
+    try:
+        for ticker in tickers:
+            print(f"Fetching data for {ticker} from {start_date} to {end_date}...")
+            new_data = yf.download(ticker, start=start_date, end=end_date)
+
+            if new_data.empty:
+                print(f"No data found for {ticker}. Skipping...")
+                continue
+
+            # Process data and insert it into the database
+            new_data.reset_index(inplace=True)
+            new_data['ticker'] = ticker
+            new_data = new_data[['Date', 'ticker', 'Open', 'High', 'Low', 'Close', 'Volume']]
+            new_data.columns = ['date', 'ticker', 'open', 'high', 'low', 'close', 'volume']
+            new_data.to_sql('stock_data', conn, if_exists='append', index=False)
+            print(f"Data for {ticker} added to the database.")
+
+    except Exception as e:
+        print(f"An error occurred while fetching data: {e}")
+
+    finally:
+        conn.close()
+
+# Usage example:
+
+

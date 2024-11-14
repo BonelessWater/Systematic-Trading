@@ -69,7 +69,7 @@ class Strategy1:
 
         return result
     
-    def generate_selection_csv(self, daily_top_stocks, csv_path='stock_selection_frequency.csv'):
+    def generate_selection_csv(self, daily_top_stocks, csv_path='data/stock_selection_frequency.csv'):
         """Generate a CSV representing the proportion of times each stock is selected."""
         # Debugging: Check columns of daily_top_stocks
         print("Daily Top Stocks Columns:", daily_top_stocks.columns)
@@ -139,7 +139,7 @@ class Strategy1:
         """Calculate the largest drawdown."""
         return result['Drawdown'].min()  # Most negative drawdown is the largest
 
-    def plot_pnl(self, result, csv_path='pnl_drawdown.csv', save_path='pnl_plot.png', log_scale=False):
+    def plot_pnl(self, result, csv_path='data/pnl_drawdown.csv', save_path='data/pnl_plot.png', log_scale=False):
         """Plot cumulative PnL and drawdown over time, with optional saving to a CSV and logarithmic scaling."""
         # Data cleaning
         result = result.dropna(subset=['date', 'PnL', 'Drawdown'])

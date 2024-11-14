@@ -1,6 +1,6 @@
 from trading_system import TradingSystem
 from strategy import Strategy1
-from data import get_data
+from data import get_data, add_tickers_and_data
 from init_db import init_db
 from datetime import datetime
 import pandas as pd
@@ -10,9 +10,13 @@ if __name__ == "__main__":
     #! Run if database is not initialized
     #init_db()
 
+    #! Helper function to add new tickers
+    #add_tickers_and_data(tickers)
+
+
     # Get data, end_date defaults to today's date
     print('Fetching data')
-    data : pd.DataFrame = get_data(start_date='2024-01-01', fetch=False)
+    data : pd.DataFrame = get_data(start_date='2024-01-01', fetch=True)
     print('Data fetched')
 
     risk_target = 0.30 # Risky
