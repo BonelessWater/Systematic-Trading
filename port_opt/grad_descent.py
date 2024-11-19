@@ -1,72 +1,77 @@
 import autograd.numpy as np
 from autograd import grad
 
-correlation_matrix = np.array([
-    [1, 0.5, 0.3, 0.2, 0.1],
-    [0.5, 1, 0.4, 0.3, 0.2],
-    [0.3, 0.4, 1, 0.6, 0.3],
-    [0.2, 0.3, 0.6, 1, 0.4],
-    [0.1, 0.2, 0.3, 0.4, 1]
-])
+class PortfolioOptimizer:
+    def __init__(self, correlation_matrix):
+        """
+        Initialize the Portfolio Optimizer with the given correlation matrix.
+        :param correlation_matrix: 2D numpy array representing asset correlations.
+        """
+        self.correlation_matrix = np.array(correlation_matrix)
+        self.avg_corr_grad = grad(self._average_correlation)
 
-def tracking_error(curr_pos, ideal_pos):
-    error = np.sum((curr_pos - ideal_pos) ** 2)
-    return np.sqrt(error / 2)
+    def tracking_error(self, curr_pos, ideal_pos):
+        """
+        Calculate the tracking error between the current and ideal positions.
+        """
+        error = np.sum((curr_pos - ideal_pos) ** 2)
+        return np.sqrt(error / 2)
 
-def average_correlation(positions):
-    total_correlation = 0
-    count = 0
-    for i in range(len(positions)):
-        for j in range(i + 1, len(positions)):
-            # Weight each correlation term by the positions
-            total_correlation += correlation_matrix[i][j] * positions[i] * positions[j]
-            count += 1
-    return total_correlation / count if count != 0 else 0
+    def _average_correlation(self, positions):
+        """
+        Calculate the average correlation weighted by the positions.
+        """
+        total_correlation = 0
+        count = 0
+        for i in range(len(positions)):
+            for j in range(i + 1, len(positions)):
+                total_correlation += (
+                    self.correlation_matrix[i][j] * positions[i] * positions[j]
+                )
+                count += 1
+        return total_correlation / count if count != 0 else 0
 
-avg_corr_grad = grad(average_correlation)
+    def objective_function(self, curr_pos, ideal_pos):
+        """
+        Calculate the combined objective function (tracking error + average correlation).
+        """
+        te = self.tracking_error(curr_pos, ideal_pos)
+        avg_corr = self._average_correlation(curr_pos)
+        return te + avg_corr
 
-def objective_function(curr_pos, ideal_pos):
-    te = tracking_error(curr_pos, ideal_pos)
-    avg_corr = average_correlation(curr_pos)
-    return te + avg_corr
+    def gradient_descent(self, curr_pos, ideal_pos, learning_rate=3, iterations=100):
+        """
+        Perform gradient descent to optimize the current positions toward the ideal positions.
+        :param curr_pos: Initial positions (array-like).
+        :param ideal_pos: Target positions (array-like).
+        :param learning_rate: Step size for the gradient update.
+        :param iterations: Number of iterations for the optimization.
+        :return: Optimized integer positions.
+        """
+        curr_pos = np.array(curr_pos, dtype=np.float64)
+        ideal_pos = np.array(ideal_pos, dtype=np.float64)
 
-def gradient_descent(curr_pos, ideal_pos, learning_rate=3, iterations=100):
-    curr_pos = np.array(curr_pos, dtype=np.float64) 
-    ideal_pos = np.array(ideal_pos, dtype=np.float64)
+        for _ in range(iterations):
+            # Tracking error derivative component
+            te = self.tracking_error(curr_pos, ideal_pos)
+            if te != 0:
+                te_partial_derivative = (curr_pos - ideal_pos) / (2 * te)
+            else:
+                te_partial_derivative = np.zeros_like(curr_pos)
 
-    for _ in range(iterations):
-        # Tracking error derivative component
-        te = tracking_error(curr_pos, ideal_pos)
-        if te != 0:
-            te_partial_derivative = (curr_pos - ideal_pos) / (2 * te)
-        else:
-            te_partial_derivative = np.zeros_like(curr_pos)
+            # Average correlation derivative component
+            corr_partial_derivative = self.avg_corr_grad(curr_pos)
 
-        # Average correlation derivative component using autograd
-        corr_partial_derivative = avg_corr_grad(curr_pos)
+            # Combined derivative
+            total_partial_derivative = te_partial_derivative + corr_partial_derivative
 
-        # Combined derivative
-        total_partial_derivative = te_partial_derivative + corr_partial_derivative
+            # Update positions
+            curr_pos -= learning_rate * total_partial_derivative
 
-        # Update positions (without rounding to avoid casting errors)
-        curr_pos -= learning_rate * total_partial_derivative
+            # Check for convergence
+            obj_value = self.objective_function(curr_pos, ideal_pos)
+            if obj_value < 1e-6:
+                break
 
-        # Calculate the new objective function value
-        obj_value = objective_function(curr_pos, ideal_pos)
-        if obj_value < 1e-80:
-            break
-    
-    # Round positions to integer values only once at the end
-    return np.round(curr_pos).astype(int).tolist()
-
-# Initial positions
-ideal_pos = [15.3, 21.3, 11.7, 7.4, 19.2]
-curr_pos = [0, 0, 0, 0, 0]
-
-print(f'Starting positions {curr_pos}')
-print(f'Starting objective function value {objective_function(np.array(curr_pos), np.array(ideal_pos))}')
-
-curr_pos = gradient_descent(curr_pos, ideal_pos)
-
-print(f'Ending positions {curr_pos}')
-print(f'Ending objective function value {objective_function(np.array(curr_pos), np.array(ideal_pos))}')
+        # Round positions to integer values only once at the end
+        return np.round(curr_pos).astype(int).tolist()
