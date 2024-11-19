@@ -1,7 +1,4 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
+from port_opt import gradient_descent, objective_function
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -23,52 +20,126 @@ class Strategy1:
         self.num_stocks = num_stocks  # Number of top stocks to select
 
     def execute(self, stop_loss_threshold=1.0):
-        """Selects top performers daily and invests for the next day, with stop-loss to terminate early."""
-        print(f"Executing Top {self.num_stocks} Winner Strategy...")
+        """Executes strategy using gradient descent and plots comparisons."""
+        print(f"Executing Top {self.num_stocks} Winner Strategy with Gradient Descent...")
+
+        # Ensure required columns are present
+        required_columns = {'date', 'PercentChange', 'ticker', 'close'}
+        missing_columns = required_columns - set(self.data.columns)
+        if missing_columns:
+            raise ValueError(f"Missing required columns in data: {missing_columns}")
+
+        # Sort data by date and PercentChange
         self.data = self.data.sort_values(['date', 'PercentChange'], ascending=[True, False])
 
-        # Debugging: Check if 'ticker' column exists
-        print("Data Columns:", self.data.columns)
+        # Group by date and select the top `num_stocks` with the highest PercentChange
+        daily_top_stocks = (
+            self.data.groupby('date', group_keys=False)
+            .apply(lambda group: group.nlargest(self.num_stocks, 'PercentChange'))
+            .copy()
+        )
 
-        # Group by date and select the top `num_stocks` tickers with the highest PercentChange
-        daily_top_stocks = self.data.groupby('date').head(self.num_stocks)
+        # Calculate ideal positions (mean PercentChange for each ticker)
+        tickers = daily_top_stocks['ticker'].unique()
+        ideal_positions = (
+            daily_top_stocks.groupby('ticker')['PercentChange'].mean().reindex(tickers).values
+        )
 
-        # Ensure it’s a copy to avoid warnings
-        daily_top_stocks = daily_top_stocks.copy()
+        # Compute the correlation matrix for the ideal positions
+        correlation_matrix = np.corrcoef(np.tile(ideal_positions, (len(ideal_positions), 1)))
 
-        # Shift the close prices to simulate next day's returns
-        daily_top_stocks.loc[:, 'Next_Close'] = daily_top_stocks.groupby('ticker')['close'].shift(-1)
-        daily_top_stocks = daily_top_stocks.dropna(subset=['Next_Close'])  # Drop NaNs after shifting
+        # Initialize current positions to zeros
+        current_positions = np.zeros(len(ideal_positions), dtype=np.float64)
 
-        # Calculate daily returns for the selected stocks
-        daily_top_stocks['Daily_Return'] = (daily_top_stocks['Next_Close'] / daily_top_stocks['close']) - 1
+        # Lists to store results
+        realized_capital = [self.capital]
+        benchmark_capital = [self.capital]
+        tracking_errors = []
 
-        # Calculate equal allocation and portfolio daily return
-        daily_top_stocks['Weight'] = 1 / self.num_stocks  # Adjust weight based on the number of stocks
-        daily_top_stocks['Weighted_Return'] = daily_top_stocks['Weight'] * daily_top_stocks['Daily_Return']
-        portfolio_returns = daily_top_stocks.groupby('date')['Weighted_Return'].sum()
+        # Iterate through each date
+        for date, group in daily_top_stocks.groupby('date'):
+            # Get realized positions using gradient descent
+            realized_positions = gradient_descent(current_positions, ideal_positions, correlation_matrix)
+            current_positions = realized_positions  # Update positions for next step
 
-        # Calculate cumulative returns and cumulative PnL
-        cumulative_returns = (1 + portfolio_returns).cumprod() - 1
-        cumulative_pnl = self.capital * cumulative_returns
+            # Normalize realized positions to form weights
+            total_realized = np.sum(realized_positions)
+            realized_weights = realized_positions / total_realized if total_realized > 0 else np.zeros_like(realized_positions)
 
-        # Store results with drawdown
-        result = pd.DataFrame({
-            'date': cumulative_pnl.index,
-            'PnL': cumulative_pnl.values,
-            'Cumulative_Returns': cumulative_returns[:len(cumulative_pnl)].values
+            # Normalize ideal positions to use as benchmark weights
+            total_ideal = np.sum(ideal_positions)
+            normalized_positions = ideal_positions / total_ideal if total_ideal > 0 else np.zeros_like(ideal_positions)
+
+            # Map positions to tickers
+            ticker_to_realized = dict(zip(tickers, realized_weights))
+            ticker_to_normalized = dict(zip(tickers, normalized_positions))
+
+            group['Realized_Weights'] = group['ticker'].map(ticker_to_realized)
+            group['Normalized_Weights'] = group['ticker'].map(ticker_to_normalized)
+
+            # Shift close prices to simulate next day's returns
+            group['Next_Close'] = group.groupby('ticker')['close'].shift(-1)
+            group = group.dropna(subset=['Next_Close'])  # Drop rows with NaN Next_Close
+            group['Daily_Return'] = (group['Next_Close'] / group['close']) - 1
+
+            # Realized strategy capital
+            group['Realized_Contribution'] = group['Realized_Weights'] * group['Daily_Return']
+            realized_capital.append(realized_capital[-1] * (1 + group['Realized_Contribution'].sum()))
+
+            # Benchmark capital
+            group['Benchmark_Contribution'] = group['Normalized_Weights'] * group['Daily_Return']
+            benchmark_capital.append(benchmark_capital[-1] * (1 + group['Benchmark_Contribution'].sum()))
+
+            # Tracking error
+            tracking_error = np.sqrt(np.sum((group['Realized_Weights'] - group['Normalized_Weights']) ** 2))
+            tracking_errors.append(tracking_error)
+
+        # Create DataFrame for results
+        dates = daily_top_stocks['date'].unique()
+        results = pd.DataFrame({
+            'date': dates,
+            'Realized_Capital': realized_capital[1:],  # Exclude initial capital
+            'Benchmark_Capital': benchmark_capital[1:],
+            'Tracking_Error': tracking_errors,
         })
 
-        # Ensure dates are valid and sorted
-        result['date'] = pd.to_datetime(result['date'], errors='coerce')
-        result = result.dropna(subset=['date']).sort_values(by='date')
+        # Plot results
+        self.plot_results(results)
 
-        result['Drawdown'] = self.calculate_drawdown(cumulative_returns)
-        # Create the frequency table of stock selections
-        self.generate_selection_csv(daily_top_stocks)
+        # Print summary metrics
+        print(f"Final Realized Capital: ${realized_capital[-1]:,.2f}")
+        print(f"Final Benchmark Capital: ${benchmark_capital[-1]:,.2f}")
+        print(f"Average Tracking Error: {np.mean(tracking_errors):.4f}")
 
-        return result
-    
+        return results
+
+    def plot_results(self, results):
+        """Plots the realized vs benchmark capital and tracking error over time."""
+        plt.figure(figsize=(14, 7), dpi=100)
+
+        # Plot capital
+        plt.subplot(2, 1, 1)
+        plt.plot(results['date'], results['Realized_Capital'], label='Realized Capital', color='blue')
+        plt.plot(results['date'], results['Benchmark_Capital'], label='Benchmark Capital', color='green')
+        plt.title('Portfolio Capital Over Time')
+        plt.xlabel('Date')
+        plt.ylabel('Capital')
+        plt.legend()
+        plt.grid()
+
+        # Plot tracking error
+        plt.subplot(2, 1, 2)
+        plt.plot(results['date'], results['Tracking_Error'], label='Tracking Error', color='red')
+        plt.title('Tracking Error Over Time')
+        plt.xlabel('Date')
+        plt.ylabel('Tracking Error')
+        plt.legend()
+        plt.grid()
+
+        plt.tight_layout()
+        plt.show()
+
+
     def generate_selection_csv(self, daily_top_stocks, csv_path='data/stock_selection_frequency.csv'):
         """Generate a CSV representing the proportion of times each stock is selected."""
         # Debugging: Check columns of daily_top_stocks

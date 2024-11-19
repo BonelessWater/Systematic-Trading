@@ -13,7 +13,7 @@ class TradingSystem:
         for proportion, strategy in self.strategies:
             print(f"Backtesting {strategy.__class__.__name__} with {proportion * 100}% of capital.")
             self.results[strategy.__class__.__name__] = strategy.execute()
-            strategy.plot_capital_over_time(self.results[strategy.__class__.__name__], save_path='capital_over_time.png')
+            strategy.plot_capital_over_time(self.results[strategy.__class__.__name__], save_path='data/capital_over_time.png')
     
     def graph(self):
         """Visualize the results."""
@@ -47,7 +47,7 @@ class TradingSystem:
             print(f"\nPlotting {strategy_name} performance...")
 
             # Save the data to CSV
-            csv_path = f"{csv_path_prefix}_{strategy_name}.csv"
+            csv_path = f"data/{csv_path_prefix}_{strategy_name}.csv"
             result.to_csv(csv_path, index=False)
             print(f"Data for {strategy_name} saved to {csv_path}")
 
@@ -57,7 +57,7 @@ class TradingSystem:
                 # Plot and optionally save the graph
                 strategy_instance.plot_pnl(
                     result, 
-                    save_path=f"{save_path}_{strategy_name}.png" if save_path else None, 
+                    save_path=f"data/{save_path}_{strategy_name}.png" if save_path else None, 
                     log_scale=log_scale  # Pass log_scale as a keyword argument
                 )
                 strategy_instance.plot_drawdown(result)

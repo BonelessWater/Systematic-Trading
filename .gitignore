@@ -4,6 +4,5 @@ venv
 # Stock data
 sp500_stock_data.db
 
-# csv files
-*.csv
-*.png
+# csv and png files
+/data
