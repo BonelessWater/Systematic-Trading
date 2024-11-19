@@ -1,4 +1,7 @@
-from port_opt.grad_descent import PortfolioOptimizer
+from port_opt.grad_descent import GradDescentOptimizer
+from port_opt.adam import AdamOptimizer
+from port_opt.pyomo import PyomoOptimizer
+from port_opt.scipy_min import ScipyOptimizer
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,7 +22,7 @@ class Strategy1:
         self.risk_target = risk_target
         self.capital = capital
         self.num_stocks = num_stocks
-        self.optimizer = PortfolioOptimizer(correlation_matrix) if correlation_matrix else None
+        self.optimizer = GradDescentOptimizer(correlation_matrix) if correlation_matrix else None
 
     def execute(self, stop_loss_threshold=1.0):
         """Selects top performers daily, optimizes positions to integer shares, and invests for the next day."""

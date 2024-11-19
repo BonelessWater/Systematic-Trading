@@ -1,7 +1,7 @@
 import autograd.numpy as np
 from autograd import grad
 
-class PortfolioOptimizer:
+class GradDescentOptimizer:
     def __init__(self, correlation_matrix):
         """
         Initialize the Portfolio Optimizer with the given correlation matrix.

@@ -2,5 +2,8 @@ yfinance
 numpy
 pandas
 matplotlib
+
 autograd
 scikit-learn
+pyomo
+cvxpy
