@@ -39,7 +39,7 @@ class AdamOptimizer:
         avg_corr = self._average_correlation(curr_pos)
         return te + avg_corr
 
-    def adam_optimization(self, curr_pos, ideal_pos, learning_rate=1, iterations=100, beta1=0.9, beta2=0.999, epsilon=1e-8):
+    def optimize(self, curr_pos, ideal_pos, learning_rate=1, iterations=100, beta1=0.9, beta2=0.999, epsilon=1e-8):
         """
         Perform Adam optimization to optimize the current positions toward the ideal positions.
         """

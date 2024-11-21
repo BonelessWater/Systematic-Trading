@@ -39,7 +39,7 @@ class PyomoOptimizer:
         for i in range(n_assets):
             self.model.add_component(f'bound_{i}', pyo.Constraint(expr=self.model.x[i] <= self.U[i]))
 
-    def solve(self):
+    def optimize(self):
         """
         Solve the optimization problem.
         """

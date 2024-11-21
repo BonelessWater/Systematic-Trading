@@ -7,13 +7,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 class Strategy1:
-    def __init__(self, data, risk_target, capital, num_stocks=100, correlation_matrix=None):
+    def __init__(self, data, risk_target, capital, num_stocks=100, window=30):
         """
         :param data: DataFrame with ['date', 'ticker', 'close', 'PercentChange'] columns.
         :param risk_target: Risk target parameter (for future use).
         :param capital: Total capital available for investment.
         :param num_stocks: Number of stocks to include in the portfolio.
-        :param correlation_matrix: Correlation matrix for assets used in optimization.
+        :param window: Rolling window size for covariance calculation.
         """
         if data is None or data.empty:
             raise ValueError("The input data is either None or empty.")
@@ -22,17 +22,64 @@ class Strategy1:
         self.risk_target = risk_target
         self.capital = capital
         self.num_stocks = num_stocks
-        self.optimizer = GradDescentOptimizer(correlation_matrix) if correlation_matrix else None
+        self.window = window
 
-    def execute(self, stop_loss_threshold=1.0):
+        # Ensure the data is sorted for proper processing
+        self.data['date'] = pd.to_datetime(self.data['date'], errors='coerce')
+        self.data = self.data.sort_values(['date', 'ticker']).dropna(subset=['date', 'ticker', 'PercentChange'])
+
+        # Calculate covariance matrices
+        print("Calculating covariance matrices...")
+        self.covariance_matrices = self.calculate_covariance_matrices()
+
+        # Initialize optimizer using the most recent covariance matrix
+        if self.covariance_matrices:
+            last_date = max(self.covariance_matrices.keys())
+            correlation_matrix = self.covariance_matrices[last_date]
+            self.optimizer = GradDescentOptimizer(correlation_matrix, capital)
+            print(f"Optimizer initialized with correlation matrix for {last_date}.")
+        else:
+            self.optimizer = None
+            print("No valid covariance matrices calculated. Optimizer not initialized.")
+
+    def calculate_covariance_matrices(self):
+        """
+        Calculate rolling covariance matrices for each day.
+
+        :return: Dictionary mapping each date to its covariance matrix.
+        """
+        unique_dates = self.data['date'].unique()
+        covariance_matrices = {}
+
+        for date in unique_dates:
+            # Filter data for the rolling window
+            start_date = date - pd.Timedelta(days=self.window)
+            rolling_data = self.data[(self.data['date'] > start_date) & (self.data['date'] <= date)]
+
+            # Ensure there are no duplicate rows for pivot
+            rolling_data = rolling_data.drop_duplicates(subset=['date', 'ticker'])
+
+            # Pivot the data to get tickers as columns
+            pivoted_data = rolling_data.pivot(index='date', columns='ticker', values='PercentChange')
+
+            # Drop columns with NaN values (tickers not present in the window)
+            pivoted_data = pivoted_data.dropna(axis=1, how='any')
+
+            # Calculate covariance matrix
+            if not pivoted_data.empty:
+                covariance_matrix = pivoted_data.cov().values
+                covariance_matrices[date] = covariance_matrix
+
+        if not covariance_matrices:
+            print("No covariance matrices were calculated. Ensure data has sufficient coverage.")
+        return covariance_matrices
+
+    def execute(self, stop_loss_threshold=1.0, save_to_csv=True, csv_path="data/daily_top_stocks.csv"):
         """Selects top performers daily, optimizes positions to integer shares, and invests for the next day."""
         print(f"Executing Top {self.num_stocks} Winner Strategy with Integer Optimization...")
 
         # Sort data by date and PercentChange
         self.data = self.data.sort_values(['date', 'PercentChange'], ascending=[True, False])
-
-        # Debugging: Check if 'ticker' column exists
-        print("Data Columns:", self.data.columns)
 
         # Group by date and select the top `num_stocks` tickers with the highest PercentChange
         daily_top_stocks = (
@@ -54,23 +101,26 @@ class Strategy1:
             (self.capital * daily_top_stocks['Ideal_Weight']) / daily_top_stocks['close']
         )
 
+        tickers = daily_top_stocks['ticker'].unique()
+        prices = daily_top_stocks.groupby('ticker')['close'].mean().reindex(tickers).values
+
         # Optimize positions using PortfolioOptimizer
         if self.optimizer:
             tickers = daily_top_stocks['ticker'].unique()
             ideal_positions = daily_top_stocks.groupby('ticker')['Ideal_Positions'].mean().reindex(tickers).values
-            realized_positions = self.optimizer.gradient_descent(
+            realized_positions = self.optimizer.optimize(
                 curr_pos=np.zeros(len(ideal_positions)),
                 ideal_pos=ideal_positions,
+                prices=prices,
                 learning_rate=3,
                 iterations=100
             )
+            # Assign optimized positions back to daily_top_stocks
+            ticker_to_positions = dict(zip(tickers, realized_positions))
+            daily_top_stocks['Realized_Positions'] = daily_top_stocks['ticker'].map(ticker_to_positions)
         else:
             print("PortfolioOptimizer not initialized. Using ideal positions as realized positions.")
-            realized_positions = daily_top_stocks['Ideal_Positions']
-
-        # Map integer positions back to tickers
-        ticker_to_realized = dict(zip(daily_top_stocks['ticker'].unique(), realized_positions))
-        daily_top_stocks['Realized_Positions'] = daily_top_stocks['ticker'].map(ticker_to_realized)
+            daily_top_stocks['Realized_Positions'] = daily_top_stocks['Ideal_Positions']
 
         # Calculate portfolio daily returns for realized and ideal capital
         daily_top_stocks['Realized_Return'] = (
@@ -93,7 +143,13 @@ class Strategy1:
         for date, group in daily_top_stocks.groupby('date'):
             realized = group['Realized_Positions'].values
             ideal = group['Ideal_Positions'].values
-            tracking_errors.append(np.sqrt(np.sum((realized - ideal) ** 2)))
+            tracking_error = np.sqrt(np.sum((realized - ideal) ** 2))
+            tracking_errors.append(tracking_error)
+
+        # Save to CSV if required
+        if save_to_csv:
+            daily_top_stocks.to_csv(csv_path, index=False)
+            print(f"Daily top stocks saved to {csv_path}")
 
         # Store results
         results = pd.DataFrame({
@@ -103,19 +159,8 @@ class Strategy1:
             'Tracking_Error': tracking_errors
         })
 
-        # Calculate Drawdown for Realized Capital
-        cumulative_max = results['Realized_Capital'].cummax()
-        results['Drawdown'] = (results['Realized_Capital'] - cumulative_max) / cumulative_max
-        
-        # Plot capital and tracking error
-        self.plot_capital(results, tracking_errors=results['Tracking_Error'])
-
-        # Debugging: Print a summary
-        print(f"Final Realized Capital: ${realized_capital.iloc[-1]:,.2f}")
-        print(f"Final Ideal Capital: ${ideal_capital.iloc[-1]:,.2f}")
-
+        # Return results
         return results
-
 
     def calculate_drawdown(self, cumulative_returns):
         """Calculate the drawdown from the cumulative returns series."""
