@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 class TradingSystem:
     def __init__(self, strategies):
         """
@@ -16,10 +18,21 @@ class TradingSystem:
             strategy.plot_capital_over_time(self.results[strategy.__class__.__name__], save_path='data/capital_over_time.png')
     
     def graph(self):
-        """Visualize the results."""
+        """Visualize the results for each metric in the strategy results."""
         print("Generating graphs...")
+        
         for strategy_name, result in self.results.items():
-            result.plot(title=f"{strategy_name} Performance")
+            print(f"Plotting results for {strategy_name}...")
+            
+            # Plot each column individually, skipping the 'date' column
+            for column in result.columns:
+                if column != 'date':
+                    result.plot(x='date', y=column, title=f"{strategy_name} - {column} Over Time", figsize=(10, 6))
+                    plt.xlabel("Date")
+                    plt.ylabel(column)
+                    plt.grid(True)
+                    plt.tight_layout()
+                    plt.show()
 
     def metrics(self):
         """Print key metrics of each strategy."""

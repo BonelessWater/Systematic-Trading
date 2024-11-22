@@ -1,7 +1,9 @@
 from port_opt.grad_descent import GradDescentOptimizer
+from port_opt.sgd import StochasticGradDescentOptimizer
 from port_opt.adam import AdamOptimizer
 from port_opt.pyomo import PyomoOptimizer
 from port_opt.scipy_min import ScipyOptimizer
+from port_opt.utils import calculate_tracking_error_metrics_scalar, calculate_optimizer_quality
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -36,7 +38,7 @@ class Strategy1:
         if self.covariance_matrices:
             last_date = max(self.covariance_matrices.keys())
             correlation_matrix = self.covariance_matrices[last_date]
-            self.optimizer = GradDescentOptimizer(correlation_matrix, capital)
+            self.optimizer = StochasticGradDescentOptimizer(correlation_matrix, capital)
             print(f"Optimizer initialized with correlation matrix for {last_date}.")
         else:
             self.optimizer = None
@@ -109,12 +111,13 @@ class Strategy1:
             tickers = daily_top_stocks['ticker'].unique()
             ideal_positions = daily_top_stocks.groupby('ticker')['Ideal_Positions'].mean().reindex(tickers).values
             realized_positions = self.optimizer.optimize(
-                curr_pos=np.zeros(len(ideal_positions)),
+                curr_pos=ideal_positions,
                 ideal_pos=ideal_positions,
                 prices=prices,
-                learning_rate=3,
-                iterations=100
+                learning_rate=0.5,
+                iterations=1000
             )
+
             # Assign optimized positions back to daily_top_stocks
             ticker_to_positions = dict(zip(tickers, realized_positions))
             daily_top_stocks['Realized_Positions'] = daily_top_stocks['ticker'].map(ticker_to_positions)
@@ -159,14 +162,29 @@ class Strategy1:
             'Tracking_Error': tracking_errors
         })
 
+        # Prepare positions for tracking error metrics
+        positions = daily_top_stocks.groupby('date').apply(
+            lambda group: pd.DataFrame({
+                'date': [group.name] * len(group),
+                'realized': group['Realized_Positions'].values,
+                'ideal': group['Ideal_Positions'].values
+            })
+        ).reset_index(drop=True)
+
+        # Calculate scalar metrics
+        scalar_metrics = calculate_tracking_error_metrics_scalar(positions)
+
+        # Print metrics
+        print("Tracking Error Metrics:")
+        for metric, value in scalar_metrics.items():
+            print(f"{metric}: {value:.4f}")
+
+        quality_score = calculate_optimizer_quality(scalar_metrics)
+
+        print(quality_score)
+
         # Return results
         return results
-
-    def calculate_drawdown(self, cumulative_returns):
-        """Calculate the drawdown from the cumulative returns series."""
-        cumulative_max = cumulative_returns.cummax()
-        drawdown = (cumulative_returns - cumulative_max) / (cumulative_max + 1e-8)  # Add epsilon to avoid divide-by-zero
-        return drawdown
 
     def generate_selection_csv(self, daily_top_stocks, csv_path='data/stock_selection_frequency.csv'):
         """Generate a CSV representing the proportion of times each stock is selected."""
@@ -293,7 +311,6 @@ class Strategy1:
             plt.savefig(save_path)
             print(f"Plot saved to {save_path}")
         plt.show()
-
 
     def plot_capital_over_time(self, result, save_path='data/capital_over_time.png'):
         """

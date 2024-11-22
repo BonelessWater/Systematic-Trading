@@ -1,6 +1,6 @@
 import autograd.numpy as np
 
-class GradDescentOptimizer:
+class StochasticGradDescentOptimizer:
     def __init__(self, correlation_matrix, capital, penalty_weight=0.1):
         """
         Initialize the Portfolio Optimizer.
@@ -34,36 +34,45 @@ class GradDescentOptimizer:
         penalty = self.penalty_weight * self.capital_utilization_penalty(curr_pos, prices)
         return te + penalty
 
-    def optimize(self, curr_pos, ideal_pos, prices, learning_rate=0.5, iterations=500):
+    def optimize(self, curr_pos, ideal_pos, prices, learning_rate=0.5, iterations=500, batch_size=5):
         """
-        Perform gradient descent to optimize positions.
+        Perform stochastic gradient descent to optimize positions.
         :param curr_pos: Initial positions (array-like).
         :param ideal_pos: Target positions (array-like).
         :param prices: Asset prices (array-like).
         :param learning_rate: Step size for gradient updates.
         :param iterations: Number of iterations.
+        :param batch_size: Number of assets in each minibatch.
         :return: Optimized integer positions.
         """
-        curr_pos = ideal_pos # Initialize with small random values
+        curr_pos = np.array(curr_pos, dtype=np.float64)
         ideal_pos = np.array(ideal_pos, dtype=np.float64)
         prices = np.array(prices, dtype=np.float64)
 
-        for i in range(iterations):
-            # Compute gradients for tracking error and penalty
-            te = np.linalg.norm(curr_pos - ideal_pos)
-            te_grad = (curr_pos - ideal_pos) / (2 * te) if te != 0 else np.zeros_like(curr_pos)
+        num_assets = len(curr_pos)
 
-            used_capital = np.sum(curr_pos * prices)
-            penalty_grad = -2 * self.penalty_weight * (self.capital - used_capital) * prices / self.capital
+        for i in range(iterations):
+            # Select a random minibatch of assets
+            indices = np.random.choice(num_assets, size=batch_size, replace=False)
+            curr_pos_batch = curr_pos[indices]
+            ideal_pos_batch = ideal_pos[indices]
+            prices_batch = prices[indices]
+
+            # Compute gradients for the minibatch
+            te = np.linalg.norm(curr_pos_batch - ideal_pos_batch)
+            te_grad = (curr_pos_batch - ideal_pos_batch) / (2 * te) if te != 0 else np.zeros_like(curr_pos_batch)
+
+            used_capital_batch = np.sum(curr_pos_batch * prices_batch)
+            penalty_grad = -2 * self.penalty_weight * (self.capital - used_capital_batch) * prices_batch / self.capital
 
             # Combine and scale gradients
             total_grad = te_grad + penalty_grad
             total_grad /= np.linalg.norm(total_grad) + 1e-8  # Normalize gradients
 
-            # Update positions
-            curr_pos -= learning_rate * total_grad
+            # Update positions for the batch
+            curr_pos[indices] -= learning_rate * total_grad
             curr_pos = np.maximum(curr_pos, 0)  # Enforce non-negativity
-
+            
             # Stop if objective function converges
             if self.objective_function(curr_pos, ideal_pos, prices) < 1e-6:
                 break
