@@ -51,7 +51,7 @@ class AdamOptimizer:
         v = np.zeros_like(curr_pos)
         t = 0
 
-        for _ in range(iterations):
+        for i in range(iterations):
             t += 1
 
             # Tracking error derivative component
@@ -61,11 +61,8 @@ class AdamOptimizer:
             else:
                 te_partial_derivative = np.zeros_like(curr_pos)
 
-            # Average correlation derivative component
-            corr_partial_derivative = self.avg_corr_grad(curr_pos)
-
             # Combined derivative
-            total_partial_derivative = te_partial_derivative + 0.005 * corr_partial_derivative
+            total_partial_derivative = te_partial_derivative
 
             # Update biased moment estimates
             m = beta1 * m + (1 - beta1) * total_partial_derivative

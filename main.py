@@ -20,7 +20,7 @@ if __name__ == "__main__":
     print('Data fetched')
 
     risk_target = 0.30 # Risky
-    capital = 100000 # USD
+    capital = 1000 # One Thousand USD
 
     trading_system = TradingSystem(
         strategies=[
@@ -30,6 +30,6 @@ if __name__ == "__main__":
     )   
 
     trading_system.backtest()
-    trading_system.graph()
+    #trading_system.graph()
     trading_system.metrics()
     trading_system.plot_pnl(save_path='pnl_plot.png', log_scale=True)

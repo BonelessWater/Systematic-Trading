@@ -36,7 +36,7 @@ class BaseStrategy:
         if self.covariance_matrices:
             last_date = max(self.covariance_matrices.keys())
             correlation_matrix = self.covariance_matrices[last_date]
-            self.optimizer = GradDescentOptimizer(correlation_matrix, capital)
+            self.optimizer = StochasticGradDescentOptimizer(correlation_matrix, capital)
             print(f"Optimizer initialized with correlation matrix for {last_date}.")
         else:
             self.optimizer = None
@@ -207,7 +207,6 @@ class BaseStrategy:
             plt.savefig(save_path)
             print(f"Plot saved to {save_path}")
         plt.show()
-
 
     def plot_capital_over_time(self, result, save_path='data/capital_over_time.png'):
         """
