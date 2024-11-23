@@ -34,7 +34,7 @@ class GradDescentOptimizer:
         penalty = self.penalty_weight * self.capital_utilization_penalty(curr_pos, prices)
         return te + penalty
 
-    def optimize(self, curr_pos, ideal_pos, prices, learning_rate=0.5, iterations=500):
+    def optimize(self, curr_pos, ideal_pos, prices, learning_rate=0.3, iterations=500):
         """
         Perform gradient descent to optimize positions.
         :param curr_pos: Initial positions (array-like).
@@ -63,14 +63,6 @@ class GradDescentOptimizer:
             # Update positions
             curr_pos -= learning_rate * total_grad
             curr_pos = np.maximum(curr_pos, 0)  # Enforce non-negativity
-
-            # Debugging logs
-            if i % 10 == 0 or i == iterations - 1:
-                obj_value = self.objective_function(curr_pos, ideal_pos, prices)
-                print(f"Iteration {i}: Objective = {obj_value:.6f}, Used Capital = {used_capital:.2f}")
-                print(f"  Positions: {curr_pos}")
-                print(f"  Total Gradient: {total_grad}")
-                print()
 
             # Stop if objective function converges
             if self.objective_function(curr_pos, ideal_pos, prices) < 1e-6:

@@ -212,7 +212,3 @@ def add_tickers_and_data(tickers, db_name='sp500_stock_data.db'):
 
     finally:
         conn.close()
-
-# Usage example:
-
-

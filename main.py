@@ -1,5 +1,5 @@
 from trading_system import TradingSystem
-from strategy import Strategy1
+from strategies.strategy1 import Strategy1
 from data import get_data, add_tickers_and_data
 from init_db import init_db
 from datetime import datetime
@@ -20,12 +20,12 @@ if __name__ == "__main__":
     print('Data fetched')
 
     risk_target = 0.30 # Risky
-    capital = 10000000 # USD
+    capital = 100000 # USD
 
     trading_system = TradingSystem(
         strategies=[
             #(Proportion of capital for strategy, Strategy Class)
-            (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=5)),
+            (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=20)),
         ]
     )   
 
@@ -33,4 +33,3 @@ if __name__ == "__main__":
     trading_system.graph()
     trading_system.metrics()
     trading_system.plot_pnl(save_path='pnl_plot.png', log_scale=True)
-

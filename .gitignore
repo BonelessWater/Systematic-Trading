@@ -6,3 +6,6 @@ sp500_stock_data.db
 
 # csv and png files
 /data
+
+# Caching files
+__pycache__/
