@@ -9,3 +9,4 @@ sp500_stock_data.db
 
 # Caching files
 __pycache__/
+*/__pycache__/

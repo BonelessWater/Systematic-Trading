@@ -1,54 +1,66 @@
-import pyomo.environ as pyo
+from pyomo.environ import ConcreteModel, Var, Objective, Constraint, SolverFactory, minimize, Reals
 import numpy as np
 
 class PyomoOptimizer:
-    def __init__(self, x_b, cov_matrix, prices, capital, U, max_volatility):
+    def __init__(self, correlation_matrix):
         """
-        Initialize the Pyomo Portfolio Optimizer with problem parameters.
+        Initialize the Pyomo Portfolio Optimizer with the given correlation matrix.
+        :param correlation_matrix: 2D numpy array representing asset correlations.
         """
-        self.x_b = np.array(x_b)
-        self.cov_matrix = np.array(cov_matrix)
-        self.prices = np.array(prices)
-        self.capital = capital
-        self.U = U
-        self.max_volatility = max_volatility
-        self.model = pyo.ConcreteModel()
+        self.correlation_matrix = np.array(correlation_matrix)
 
-    def _define_model(self):
+    def tracking_error(self, model, ideal_pos):
         """
-        Define the Pyomo model for portfolio optimization.
+        Calculate the tracking error between the current and ideal positions.
         """
-        n_assets = len(self.x_b)
-        self.model.x = pyo.Var(range(n_assets), domain=pyo.Integers, bounds=(0, None))
+        return sum((model.curr_pos[i] - ideal_pos[i]) ** 2 for i in range(len(ideal_pos)))
 
-        # Objective function for tracking error
-        def objective_function(model):
-            diff = np.array([model.x[i] - self.x_b[i] for i in range(n_assets)])
-            return pyo.sqrt(sum(diff[i] * self.cov_matrix[i, j] * diff[j] for i in range(n_assets) for j in range(n_assets)))
-        self.model.objective = pyo.Objective(rule=objective_function, sense=pyo.minimize)
-
-        # Constraints
-        def capital_constraint(model):
-            return sum(self.prices[i] * model.x[i] for i in range(n_assets)) <= self.capital
-        self.model.capital_constraint = pyo.Constraint(rule=capital_constraint)
-
-        def volatility_constraint(model):
-            return pyo.sqrt(sum(model.x[i] * self.cov_matrix[i, j] * model.x[j] for i in range(n_assets) for j in range(n_assets))) <= self.max_volatility
-        self.model.volatility_constraint = pyo.Constraint(rule=volatility_constraint)
-
-        for i in range(n_assets):
-            self.model.add_component(f'bound_{i}', pyo.Constraint(expr=self.model.x[i] <= self.U[i]))
-
-    def optimize(self):
+    def objective_function(self, model, ideal_pos):
         """
-        Solve the optimization problem.
+        Define the combined objective function (tracking error).
         """
-        self._define_model()
-        solver = pyo.SolverFactory('glpk')
-        result = solver.solve(self.model)
-        return {
-            'solution': [pyo.value(self.model.x[i]) for i in range(len(self.x_b))],
-            'objective_value': pyo.value(self.model.objective),
-            'status': result.solver.status,
-            'termination_condition': result.solver.termination_condition
-        }
+        return self.tracking_error(model, ideal_pos)
+
+    def optimize(self, curr_pos, ideal_pos, prices, capital_limit):
+        """
+        Perform optimization using Pyomo to optimize the current positions toward the ideal positions,
+        with a constraint on total capital.
+        
+        :param curr_pos: Current positions.
+        :param ideal_pos: Ideal positions.
+        :param prices: List of asset prices.
+        :param capital_limit: Maximum allowable capital for positions.
+        :return: Optimized positions.
+        """
+        n_assets = len(curr_pos)
+        model = ConcreteModel()
+
+        # Define variables for current positions with a valid Pyomo domain
+        model.curr_pos = Var(range(n_assets), domain=Reals, initialize=lambda model, i: curr_pos[i])
+
+        # Define objective function
+        model.obj = Objective(
+            rule=lambda model: sum((model.curr_pos[i] - ideal_pos[i]) ** 2 for i in range(n_assets)),
+            sense=minimize
+        )
+
+        # Add constraints
+        # Ensure total positions do not exceed the capital limit
+        model.capital_constraint = Constraint(
+            expr=sum(model.curr_pos[i] * prices[i] for i in range(n_assets)) <= capital_limit
+        )
+
+        # Ensure positions are non-negative (if required)
+        model.non_negative_constraint = Constraint(
+            expr=sum(model.curr_pos[i] for i in range(n_assets)) >= 0
+        )
+
+        # Solve the model
+        solver = SolverFactory('ipopt', executable="C:/Users/domdd/Downloads/Ipopt-3.14.16-win64-msvs2019-md/Ipopt-3.14.16-win64-msvs2019-md/bin/ipopt.exe")  # Use a solver suitable for nonlinear optimization
+        results = solver.solve(model)
+
+        # Extract optimized positions
+        optimized_positions = [model.curr_pos[i].value for i in range(n_assets)]
+
+        # Round positions to integer values only once at the end
+        return np.round(optimized_positions).astype(int).tolist()

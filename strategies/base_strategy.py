@@ -1,5 +1,7 @@
-from optimizers.grad_descent import GradDescentOptimizer
 from optimizers.adam import AdamOptimizer
+from optimizers.grad_descent import GradDescentOptimizer
+from optimizers.greedy import GreedyOptimizer
+from optimizers.sgd import StochasticGradDescentOptimizer
 from optimizers.pyomo import PyomoOptimizer
 from optimizers.scipy_min import ScipyOptimizer
 import pandas as pd
@@ -36,7 +38,7 @@ class BaseStrategy:
         if self.covariance_matrices:
             last_date = max(self.covariance_matrices.keys())
             correlation_matrix = self.covariance_matrices[last_date]
-            self.optimizer = StochasticGradDescentOptimizer(correlation_matrix, capital)
+            self.optimizer = AdamOptimizer(correlation_matrix)
             print(f"Optimizer initialized with correlation matrix for {last_date}.")
         else:
             self.optimizer = None
@@ -44,35 +46,43 @@ class BaseStrategy:
 
     def calculate_covariance_matrices(self):
         """
-        Calculate rolling covariance matrices for each day.
-
-        :return: Dictionary mapping each date to its covariance matrix.
+        Efficiently calculate rolling covariance matrices for each day and store corresponding tickers.
         """
         unique_dates = self.data['date'].unique()
+        tickers = self.data['ticker'].unique()
+        date_indices = {date: idx for idx, date in enumerate(unique_dates)}
+
+        pivoted_data = self.data.pivot(index='date', columns='ticker', values='PercentChange')
+        pivoted_data = pivoted_data.fillna(method='ffill').fillna(method='bfill')  # Fill missing data
+
         covariance_matrices = {}
+        covariance_tickers = {}  # Map each date to the tickers used
+
+        data_array = pivoted_data.to_numpy()
 
         for date in unique_dates:
-            # Filter data for the rolling window
-            start_date = date - pd.Timedelta(days=self.window)
-            rolling_data = self.data[(self.data['date'] > start_date) & (self.data['date'] <= date)]
+            date_idx = date_indices[date]
+            start_idx = max(0, date_idx - self.window)
+            window_data = data_array[start_idx:date_idx + 1]
 
-            # Ensure there are no duplicate rows for pivot
-            rolling_data = rolling_data.drop_duplicates(subset=['date', 'ticker'])
+            valid_cols = ~np.isnan(window_data).all(axis=0)
+            window_data = window_data[:, valid_cols]
 
-            # Pivot the data to get tickers as columns
-            pivoted_data = rolling_data.pivot(index='date', columns='ticker', values='PercentChange')
+            if window_data.shape[1] < 2 or window_data.shape[0] < 2:
+                continue
 
-            # Drop columns with NaN values (tickers not present in the window)
-            pivoted_data = pivoted_data.dropna(axis=1, how='any')
+            cov_matrix = np.cov(window_data, rowvar=False)
 
-            # Calculate covariance matrix
-            if not pivoted_data.empty:
-                covariance_matrix = pivoted_data.cov().values
-                covariance_matrices[date] = covariance_matrix
+            if cov_matrix.size == 0 or cov_matrix.shape[0] != cov_matrix.shape[1]:
+                continue
 
-        if not covariance_matrices:
-            print("No covariance matrices were calculated. Ensure data has sufficient coverage.")
-        return covariance_matrices
+            cov_matrix += np.eye(cov_matrix.shape[0]) * 1e-5
+
+            if np.linalg.cond(cov_matrix) < 1e12:
+                covariance_matrices[date] = cov_matrix
+                covariance_tickers[date] = pivoted_data.columns[valid_cols].tolist()
+
+        return covariance_matrices, covariance_tickers
 
     def calculate_drawdown(self, cumulative_returns):
         """Calculate the drawdown from the cumulative returns series."""

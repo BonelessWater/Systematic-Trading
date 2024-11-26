@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     # Get data, end_date defaults to today's date
     print('Fetching data')
-    data : pd.DataFrame = get_data(start_date='2024-1-10', fetch=False)
+    data : pd.DataFrame = get_data(start_date='2024-6-1', fetch=False)
     print('Data fetched')
 
     risk_target = 0.30 # Risky
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     trading_system = TradingSystem(
         strategies=[
             #(Proportion of capital for strategy, Strategy Class)
-            (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=20)),
+            (1.0, Strategy1(data, risk_target=risk_target, capital=capital, num_stocks=10)),
         ]
     )   
 

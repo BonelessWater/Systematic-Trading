@@ -1,6 +1,8 @@
 from strategies.base_strategy import BaseStrategy
+from optimizers.utils import calculate_tracking_error_metrics_scalar
 import numpy as np
 import pandas as pd
+import time
 
 class Strategy1(BaseStrategy):
     def execute(self, stop_loss_threshold=1.0, save_to_csv=True, csv_path="data/daily_top_stocks.csv"):
@@ -33,16 +35,17 @@ class Strategy1(BaseStrategy):
         tickers = daily_top_stocks['ticker'].unique()
         prices = daily_top_stocks.groupby('ticker')['close'].mean().reindex(tickers).values
 
+        optimizer_start_time = time.time()
         # Optimize positions using PortfolioOptimizer
         if self.optimizer:
             tickers = daily_top_stocks['ticker'].unique()
             ideal_positions = daily_top_stocks.groupby('ticker')['Ideal_Positions'].mean().reindex(tickers).values
             realized_positions = self.optimizer.optimize(
-                curr_pos=np.zeros(len(ideal_positions)),
                 ideal_pos=ideal_positions,
+                prev_pos=ideal_positions,
                 prices=prices,
-                learning_rate=0.3,
-                iterations=1000
+                capital_limit=self.capital,
+                lambdas=[1.0, 0.1, 0.5, 0.01]
             )
             # Assign optimized positions back to daily_top_stocks
             ticker_to_positions = dict(zip(tickers, realized_positions))
@@ -50,6 +53,7 @@ class Strategy1(BaseStrategy):
         else:
             print("PortfolioOptimizer not initialized. Using ideal positions as realized positions.")
             daily_top_stocks['Realized_Positions'] = daily_top_stocks['Ideal_Positions']
+        optimizer_elapsed_time = time.time() - optimizer_start_time
 
         # Calculate portfolio daily returns for realized and ideal capital
         daily_top_stocks['Realized_Return'] = (
@@ -74,6 +78,17 @@ class Strategy1(BaseStrategy):
             ideal = group['Ideal_Positions'].values
             tracking_error = np.sqrt(np.sum((realized - ideal) ** 2))
             tracking_errors.append(tracking_error)
+
+        scalar_metrics_data = daily_top_stocks.rename(
+        columns={'Ideal_Positions': 'ideal', 'Realized_Positions': 'realized'}
+        )
+        scalar_metrics = calculate_tracking_error_metrics_scalar(scalar_metrics_data)
+
+        # Print scalar metrics
+        print("Scalar Tracking Error Metrics:")
+        for key, value in scalar_metrics.items():
+            print(f"{key}: {value:.4f}")
+        print(f"Optimizer Execution Time: {optimizer_elapsed_time:.4f} seconds")
 
         # Save to CSV if required
         if save_to_csv:

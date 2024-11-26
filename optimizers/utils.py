@@ -43,22 +43,3 @@ def calculate_tracking_error_metrics_scalar(daily_data):
         'MaxTE': max_te,  # Overall Maximum Tracking Error
         'PLTE': total_plte  # Total Portfolio-Level Tracking Error
     }
-
-def calculate_optimizer_quality(metrics, weights=None):
-    """
-    Calculate a single scalar value to assess optimizer quality.
-
-    Parameters:
-    - metrics (pd.DataFrame): A DataFrame with tracking error metrics (e.g., MATE, RMSTE, MaxTE, PLTE).
-    - weights (dict): Weights for each metric in the form {metric_name: weight}. Default is equal weighting.
-
-    Returns:
-    - quality_score (float): A single scalar value representing the optimizer's quality.
-    """
-
-    # Compute weighted aggregate score
-    quality_score = 0.0
-    for key, value in metrics.items():
-        quality_score += value
-
-    return quality_score
