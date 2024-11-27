@@ -12,6 +12,12 @@ def calculate_tracking_error_metrics_scalar(daily_data):
     Returns:
     - metrics (dict): A dictionary containing scalar values for each metric.
     """
+    if daily_data.empty or 'ideal' not in daily_data.columns or 'realized' not in daily_data.columns:
+        raise ValueError("Input DataFrame is empty or missing required columns 'ideal' and 'realized'.")
+
+    # Drop rows with missing values in 'ideal' or 'realized'
+    daily_data = daily_data.dropna(subset=['ideal', 'realized'])
+
     # Initialize variables to accumulate values
     total_mate = 0  # Mean Absolute Tracking Error
     total_rmste = 0  # Root Mean Square Tracking Error
@@ -20,9 +26,13 @@ def calculate_tracking_error_metrics_scalar(daily_data):
     total_weights = 0  # For normalization
 
     for date, group in daily_data.groupby('date'):
-        ideal_positions = np.array(group['ideal'])
-        realized_positions = np.array(group['realized'])
+        ideal_positions = np.array(group['ideal'], dtype=np.float64)
+        realized_positions = np.array(group['realized'], dtype=np.float64)
         tracking_errors = realized_positions - ideal_positions
+
+        # Skip groups with no valid data
+        if len(ideal_positions) == 0:
+            continue
 
         # Metrics for the group
         mate = np.mean(np.abs(tracking_errors))
@@ -35,6 +45,10 @@ def calculate_tracking_error_metrics_scalar(daily_data):
         total_rmste += rmste * len(group)
         total_plte += plte
         total_weights += len(group)
+
+    # Avoid division by zero
+    if total_weights == 0:
+        raise ValueError("No valid data to calculate metrics.")
 
     # Compute scalars
     return {

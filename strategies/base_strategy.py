@@ -15,7 +15,6 @@ class BaseStrategy:
         :param risk_target: Risk target parameter (for future use).
         :param capital: Total capital available for investment.
         :param num_stocks: Number of stocks to include in the portfolio.
-        :param window: Rolling window size for covariance calculation.
         """
         if data is None or data.empty:
             raise ValueError("The input data is either None or empty.")
@@ -24,7 +23,7 @@ class BaseStrategy:
         self.risk_target = risk_target
         self.capital = capital
         self.num_stocks = num_stocks
-        self.window = 30
+        self.window = 3  # Use a very small rolling window for faster computation
 
         # Ensure the data is sorted for proper processing
         self.data['date'] = pd.to_datetime(self.data['date'], errors='coerce')
@@ -46,43 +45,27 @@ class BaseStrategy:
 
     def calculate_covariance_matrices(self):
         """
-        Efficiently calculate rolling covariance matrices for each day and store corresponding tickers.
+        Calculate covariance matrices for each day in the dataset.
+        Returns a dictionary with dates as keys and covariance matrices as values.
         """
-        unique_dates = self.data['date'].unique()
-        tickers = self.data['ticker'].unique()
-        date_indices = {date: idx for idx, date in enumerate(unique_dates)}
-
-        pivoted_data = self.data.pivot(index='date', columns='ticker', values='PercentChange')
-        pivoted_data = pivoted_data.fillna(method='ffill').fillna(method='bfill')  # Fill missing data
-
         covariance_matrices = {}
-        covariance_tickers = {}  # Map each date to the tickers used
 
-        data_array = pivoted_data.to_numpy()
-
-        for date in unique_dates:
-            date_idx = date_indices[date]
-            start_idx = max(0, date_idx - self.window)
-            window_data = data_array[start_idx:date_idx + 1]
-
-            valid_cols = ~np.isnan(window_data).all(axis=0)
-            window_data = window_data[:, valid_cols]
-
-            if window_data.shape[1] < 2 or window_data.shape[0] < 2:
+        # Group by date and calculate covariance for each day
+        grouped = self.data.groupby('date')
+        for date, group in grouped:
+            if len(group) < 2:
+                # Skip days with less than 2 stocks
                 continue
 
-            cov_matrix = np.cov(window_data, rowvar=False)
+            # Pivot table to have tickers as columns and PercentChange as values
+            pivoted = group.pivot(index='ticker', columns='date', values='PercentChange')
 
-            if cov_matrix.size == 0 or cov_matrix.shape[0] != cov_matrix.shape[1]:
-                continue
+            # Compute rolling covariance with a small window
+            if pivoted.shape[0] >= self.window:
+                rolling_cov = pivoted.iloc[:, -self.window:].cov()
+                covariance_matrices[date] = rolling_cov
 
-            cov_matrix += np.eye(cov_matrix.shape[0]) * 1e-5
-
-            if np.linalg.cond(cov_matrix) < 1e12:
-                covariance_matrices[date] = cov_matrix
-                covariance_tickers[date] = pivoted_data.columns[valid_cols].tolist()
-
-        return covariance_matrices, covariance_tickers
+        return covariance_matrices
 
     def calculate_drawdown(self, cumulative_returns):
         """Calculate the drawdown from the cumulative returns series."""

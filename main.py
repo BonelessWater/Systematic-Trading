@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     # Get data, end_date defaults to today's date
     print('Fetching data')
-    data : pd.DataFrame = get_data(start_date='2024-6-1', fetch=False)
+    data : pd.DataFrame = get_data(start_date='2020-1-1', fetch=False)
     print('Data fetched')
 
     risk_target = 0.30 # Risky

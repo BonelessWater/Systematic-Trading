@@ -27,8 +27,8 @@ def init_db():
     sp500_tickers = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]['Symbol'].tolist()
 
     # Define the period for which we need data
-    start_date = '2023-01-01'
-    end_date = '2024-10-28'
+    start_date = '2015-01-01'
+    end_date = '2024-11-21'
 
     # Loop through each S&P 500 stock ticker to fetch and store data
     for ticker in sp500_tickers:

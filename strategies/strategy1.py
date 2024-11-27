@@ -42,10 +42,6 @@ class Strategy1(BaseStrategy):
             ideal_positions = daily_top_stocks.groupby('ticker')['Ideal_Positions'].mean().reindex(tickers).values
             realized_positions = self.optimizer.optimize(
                 ideal_pos=ideal_positions,
-                prev_pos=ideal_positions,
-                prices=prices,
-                capital_limit=self.capital,
-                lambdas=[1.0, 0.1, 0.5, 0.01]
             )
             # Assign optimized positions back to daily_top_stocks
             ticker_to_positions = dict(zip(tickers, realized_positions))
@@ -62,6 +58,10 @@ class Strategy1(BaseStrategy):
         daily_top_stocks['Ideal_Return'] = (
             daily_top_stocks['Ideal_Positions'] * daily_top_stocks['Daily_Return']
         )
+
+        #print(daily_top_stocks['Ideal_Positions'])
+        #print(daily_top_stocks['Realized_Positions'])
+
         portfolio_realized_returns = daily_top_stocks.groupby('date')['Realized_Return'].sum() / self.capital
         portfolio_ideal_returns = daily_top_stocks.groupby('date')['Ideal_Return'].sum() / self.capital
 

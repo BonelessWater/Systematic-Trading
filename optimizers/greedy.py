@@ -13,7 +13,6 @@ class GreedyOptimizer:
         Calculate the tracking error between current and ideal positions.
         """
         return np.sum((curr_pos - ideal_pos) ** 2)
-
     def capital_penalty(self, curr_pos, prices, capital_limit):
         """
         Calculate a simple linear penalty for exceeding the capital limit.
@@ -30,7 +29,7 @@ class GreedyOptimizer:
         capital_penalty = lambda_cp * self.capital_penalty(curr_pos, prices, capital_limit)
         return tracking_error + capital_penalty
 
-    def optimize(self, ideal_positions, prev_positions, prices, capital_limit, lambda_cp=1.0, iterations=1000):
+    def optimize(self, ideal_positions, prices, capital_limit, lambda_cp=1.0, iterations=1000):
         """
         Perform optimization to move current positions toward the ideal positions using a greedy algorithm.
         """
