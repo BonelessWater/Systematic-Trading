@@ -52,17 +52,12 @@ class TradingSystem:
                 return strategy
         return None
 
-    def plot_pnl(self, save_path=None, csv_path_prefix='pnl_drawdown', log_scale=False):
+    def plot_pnl(self, save_path=None, log_scale=False):
         """Plot cumulative PnL for each strategy and save the data to CSV."""
         print("Graphing data...")
 
         for strategy_name, result in self.results.items():
             print(f"\nPlotting {strategy_name} performance...")
-
-            # Save the data to CSV
-            csv_path = f"data/{csv_path_prefix}_{strategy_name}.csv"
-            result.to_csv(csv_path, index=False)
-            print(f"Data for {strategy_name} saved to {csv_path}")
 
             # Get the strategy instance to call its plot method
             strategy_instance = self.get_strategy_instance(strategy_name)
@@ -73,4 +68,3 @@ class TradingSystem:
                     save_path=f"data/{save_path}_{strategy_name}.png" if save_path else None, 
                     log_scale=log_scale  # Pass log_scale as a keyword argument
                 )
-                strategy_instance.plot_drawdown(result)

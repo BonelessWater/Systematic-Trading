@@ -6,13 +6,18 @@ class Risk(ABC):
     Abstract base class for risk management.
     """
 
-    def __init__(self):
+    def __init__(self, data, capital):
+        # Risk object methodology
         self.constraints: List[Callable[[Dict[str, Any]], bool]] = []
         self.metrics: List[Callable[[Dict[str, Any]], Any]] = []
         self.logs: List[Dict[str, Any]] = []
 
+        # All stock data
+        self.data = data
+        self.capital = capital
+
     @abstractmethod
-    def base_constraints(self, data: Dict[str, Any]) -> bool:
+    def base_constraints(self, data: Dict[str, Any], positions) -> bool:
         """
         Base constraints that all strategies must satisfy.
         """
@@ -25,9 +30,15 @@ class Risk(ABC):
         """
         pass
 
-    def add_constraint(self, constraint: Callable[[Dict[str, Any]], bool]) -> None:
+    def add_constraint(self, constraint: Callable[[Dict[str, Any], Any], bool]) -> None:
         """
-        Add a custom constraint function.
+        Adds a constraint to the risk object
+
+        Parameters
+        ----------
+        constraint : Callable[[Dict[str, Any]], bool]
+            Function that takes in a dictionary and returns true or false whether the
+            data meets the contraint.
         """
         self.constraints.append(constraint)
 
@@ -37,19 +48,22 @@ class Risk(ABC):
         """
         self.metrics.append(metric)
 
-    def check_constraints(self, data: Dict[str, Any]) -> bool:
+    def check_constraints(self, data: Dict[str, Any], positions) -> bool:
         """
         Check all constraints.
         """
-        # Start with base constraints
-        if not self.base_constraints(data):
+        # Start with base constraints; temporarily commented
+        '''
+        if not self.base_constraints(data, positions):
             return False
-        
+        '''
+
         # Check custom constraints
         for constraint in self.constraints:
-            if not constraint(data):
+            if not constraint(data, positions):
+                print("custom")
                 return False
-        
+
         return True
 
     def evaluate_metrics(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -58,11 +72,12 @@ class Risk(ABC):
         """
         # Start with base metrics
         metrics = self.base_metrics(data)
-        
+
         # Add custom metrics
         for metric in self.metrics:
             metrics.update(metric(data))
-        
+
+        # Log the metrics for reference
         self.logs.append(metrics)
         return metrics
 
@@ -71,13 +86,3 @@ class Risk(ABC):
         Retrieve logs of all evaluated metrics.
         """
         return self.logs
-
-# Example subclass implementation
-class ExampleRisk(Risk):
-    def base_constraints(self, data: Dict[str, Any]) -> bool:
-        # Example: Check if capital is above a threshold
-        return data.get("capital", 0) > 1000
-
-    def base_metrics(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        # Example: Calculate a simple risk metric
-        return {"leverage": data.get("capital", 1) / data.get("exposure", 1)}
