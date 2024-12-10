@@ -1,7 +1,6 @@
 from arch import arch_model
 import numpy as np
-from typing import Dict
-
+from typing import Dict, Any
 # Example of a GARCH constraint function
 def garch_constraint(data: Dict[str, Any]) -> bool:
     """
