@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Any, List, Dict
+import numpy as np
+import pandas as pd
+from arch import arch_model
 
 class Risk(ABC):
     """
@@ -8,8 +11,11 @@ class Risk(ABC):
 
     def __init__(self, data, capital):
         # Risk object methodology
-        self.constraints: List[Callable[[Dict[str, Any]], bool]] = []
-        self.metrics: List[Callable[[Dict[str, Any]], Any]] = []
+        # self.constraints: List[Callable[[Dict[str, Any]], bool]] = []
+        # self.metrics: List[Callable[[Dict[str, Any]], Any]] = []
+        self.constraints: List[Callable[[Dict[str, Any], np.ndarray, float], bool]] = []
+        self.metrics: List[Callable[[Dict[str, Any]], Dict[str, Any]]] = []
+
         self.logs: List[Dict[str, Any]] = []
 
         # All stock data
@@ -41,6 +47,7 @@ class Risk(ABC):
             data meets the contraint.
         """
         self.constraints.append(constraint)
+        # self.constraints.append(lambda data, positions: constraint(data, positions, **kwargs))
 
     def add_metric(self, metric: Callable[[Dict[str, Any]], Any]) -> None:
         """
@@ -48,7 +55,7 @@ class Risk(ABC):
         """
         self.metrics.append(metric)
 
-    def check_constraints(self, data: Dict[str, Any], positions) -> bool:
+    def check_constraints(self, data: Dict[str, Any], positions: np.ndarray) -> bool:
         """
         Check all constraints.
         """
@@ -60,7 +67,8 @@ class Risk(ABC):
 
         # Check custom constraints
         for constraint in self.constraints:
-            if not constraint(data, positions):
+            
+            if not constraint(data, positions, self.capital):
                 print("custom")
                 return False
 
