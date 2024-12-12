@@ -50,18 +50,12 @@ class Strategy2Risk(Risk):
         """
         # Metric: Portfolio standard deviation (volatility)
         # Evaluate and return metrics
-            # Define a dynamic get_returns function
-        # get_returns = lambda d: d["Daily_Return"]
 
-        # Evaluate and return metrics
         volatility_metric = portfolio_volatility_metric()  # Get the closure
 
-    # Evaluate the metric using the closure
+        # Evaluate the metric using the closure
         metrics = volatility_metric(data)  # Call the closure with `data`
         return metrics
-
-        # metrics = portfolio_volatility_metric(data)
-        # return metrics
 
 class Strategy2(BaseStrategy):
     def __init__(self, data, risk_target, capital, num_stocks, lookback_period=20):
