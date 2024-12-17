@@ -3,10 +3,7 @@ from strategies.strategy1 import Strategy1
 from strategies.strategy2 import Strategy2
 from data import get_data, add_tickers_and_data
 from init_db import init_db
-from datetime import datetime
 import pandas as pd
-from typing import Callable, Any, List, Dict
-import numpy as np
 
 if __name__ == "__main__":
     #! Run if database is not initialized
@@ -22,8 +19,8 @@ if __name__ == "__main__":
     print('Data fetched')
 
     risk_target = 0.30 # Risky
-    capital = 100000 # One Thousand USD
-
+    capital = 100000
+    
     trading_system = TradingSystem(
         strategies=[
             #(Proportion of capital for strategy, Strategy Class)
@@ -36,6 +33,4 @@ if __name__ == "__main__":
     #trading_system.graph()
     trading_system.metrics()
     trading_system.plot_pnl(save_path='pnl_plot.png', log_scale=True)
-
-
 
