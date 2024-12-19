@@ -2,7 +2,7 @@ yfinance
 numpy
 pandas
 matplotlib
-
+arch
 autograd
 scikit-learn
 pyomo
