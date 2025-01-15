@@ -152,6 +152,7 @@ class Strategy2(BaseStrategy):
         # Calculate portfolio value for the max leverage constraint
         daily_top_stocks["portfolio_value"] = (daily_top_stocks["Ideal_Positions"] * daily_top_stocks["close"]).sum()
 
+        '''
         # Check constraints
         if not self.risk.check_constraints(daily_top_stocks, self.positions):
             print("Risk constraints not satisfied. Aborting execution.")
@@ -160,7 +161,8 @@ class Strategy2(BaseStrategy):
                 "Realized_Capital": [0] * len(daily_top_stocks["date"].unique()),
                 "Ideal_Capital": [0] * len(daily_top_stocks["date"].unique())
             })
-
+        '''
+        
         # Calculate realized capital
         daily_top_stocks["Realized_Capital"] = daily_top_stocks["Ideal_Positions"] * daily_top_stocks["Next_Close"]
 
