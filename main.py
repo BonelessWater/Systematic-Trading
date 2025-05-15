@@ -14,7 +14,6 @@ def algo_lens():
     #! Helper function to add new tickers
     # add_tickers_and_data(tickers)
 
-
     # Get data, end_date defaults to today's date
     print('Fetching data')
     data : pd.DataFrame = get_data(start_date='2020-1-1', fetch=False)
